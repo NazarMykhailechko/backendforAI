@@ -1,11 +1,16 @@
 import express from "express";
-import bodyParser from "body-parser";
 import cors from "cors";
 import OpenAI from "openai";
 
 const app = express();
-app.use(bodyParser.json());
-app.use(cors());
+
+// JSON парсер
+app.use(express.json());
+
+// дозволяємо запити тільки з твого Qlik-домену
+app.use(cors({
+  origin: "https://bi_qlik.accordbank.com.ua"
+}));
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
