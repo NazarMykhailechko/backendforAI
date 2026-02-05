@@ -1,19 +1,25 @@
 import express from "express";
 import bodyParser from "body-parser";
+import cors from "cors";
 import OpenAI from "openai";
 
 const app = express();
 app.use(bodyParser.json());
+app.use(cors());
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
+});
+
+// простий маршрут для перевірки
+app.get("/", (req, res) => {
+  res.send("Backend is running!");
 });
 
 app.post("/analyze", async (req, res) => {
   try {
     const { message, data } = req.body;
 
-    // Формуємо prompt для моделі
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -40,6 +46,8 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log("Backend running on port 3000");
+// слухаємо порт із Railway
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
 });
