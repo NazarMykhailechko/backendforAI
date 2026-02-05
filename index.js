@@ -7,10 +7,8 @@ const app = express();
 // JSON парсер
 app.use(express.json());
 
-// дозволяємо запити тільки з твого Qlik-домену
-app.use(cors({
-  origin: "https://bi_qlik.accordbank.com.ua"
-}));
+// тимчасово дозволяємо всіх (для перевірки)
+app.use(cors());
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
