@@ -4,11 +4,13 @@ import OpenAI from "openai";
 
 const app = express();
 
-// JSON парсер
-app.use(express.json());
+// збільшуємо ліміт для великих масивів (наприклад, 10mb)
+app.use(express.json({ limit: "10mb" }));
 
-// тимчасово дозволяємо всіх (для перевірки)
-app.use(cors());
+// дозволяємо запити з твого Qlik-домену
+app.use(cors({
+  origin: "https://bi_qlik.accordbank.com.ua"
+}));
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -16,7 +18,7 @@ const client = new OpenAI({
 
 // простий маршрут для перевірки
 app.get("/", (req, res) => {
-  res.send("Backend is running!");
+  res.send("Backend is running with CORS and large payload support!");
 });
 
 app.post("/analyze", async (req, res) => {
@@ -44,7 +46,9 @@ app.post("/analyze", async (req, res) => {
     const reply = response.choices[0].message.content;
     res.json({ reply });
   } catch (err) {
-    console.error(err);
+    console.error("Error in /analyze:", err);
+
+    // завжди віддаємо JSON з помилкою, щоб браузер не блокував
     res.status(500).json({ error: err.message });
   }
 });
