@@ -1,42 +1,45 @@
 import express from "express";
 import bodyParser from "body-parser";
 import OpenAI from "openai";
-import cors from "cors";
 
 const app = express();
 app.use(bodyParser.json());
 
-// Дозволяємо CORS для всіх доменів
-app.use(cors());
-
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-app.get("/", (req, res) => {
-  res.send("Qlik Assistant backend is running 🚀");
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 app.post("/analyze", async (req, res) => {
   try {
     const { message, data } = req.body;
 
+    // Формуємо prompt для моделі
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: "You are a helpful assistant for Qlik users." },
-        { role: "user", content: message }
+        {
+          role: "system",
+          content: `Ти асистент для користувачів Qlik.
+У тебе є набір даних у форматі JSON.
+Кожен об'єкт має поля: bank, date, status, metric, value.
+Твоє завдання:
+- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з поля "value".
+- Якщо даних немає, чітко скажи "Немає даних".
+- Не вигадуй значення, використовуй лише те, що є у JSON. Відповідай українською мовою.`
+        },
+        { role: "user", content: message },
+        { role: "user", content: "Ось дані:\n" + JSON.stringify(data) }
       ]
     });
 
-    res.json({ reply: response.choices[0].message.content });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
+    const reply = response.choices[0].message.content;
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(3000, () => {
+  console.log("Backend running on port 3000");
 });
