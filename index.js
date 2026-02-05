@@ -1,38 +1,48 @@
 import express from "express";
-import fetch from "node-fetch";
+import bodyParser from "body-parser";
+import OpenAI from "openai";
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Використовуємо змінну середовища для ключа
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Ініціалізація OpenAI клієнта
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
+// Кореневий маршрут для перевірки
+app.get("/", (req, res) => {
+  res.send("Qlik Assistant backend is running 🚀");
+});
+
+// Основний маршрут для аналізу
 app.post("/analyze", async (req, res) => {
-  const { message, data } = req.body;
-
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini", // можна замінити на іншу модель
-        messages: [
-          { role: "system", content: "Ти асистент для аналізу даних з Qlik Sense." },
-          { role: "user", content: `Повідомлення: ${message}\nДані: ${JSON.stringify(data)}` }
-        ]
-      })
+    const { message, data } = req.body;
+
+    const response = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant analyzing Qlik data.",
+        },
+        {
+          role: "user",
+          content: `Message: ${message}\nData: ${JSON.stringify(data)}`,
+        },
+      ],
     });
 
-    const result = await response.json();
-    res.json({ answer: result.choices[0].message.content });
-  } catch (err) {
-    console.error("API error:", err);
-    res.status(500).json({ error: "Помилка при виклику OpenAI API" });
+    res.json({ reply: response.choices[0].message.content });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Запуск сервера
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
