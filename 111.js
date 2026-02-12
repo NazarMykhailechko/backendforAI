@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 
 app.post("/analyze", async (req, res) => {
   try {
-    const { message, data, fields } = req.body;
+    const { message, data } = req.body;
 
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -32,9 +32,9 @@ app.post("/analyze", async (req, res) => {
           role: "system",
           content: `Ти асистент для користувачів Qlik.
 У тебе є набір даних у форматі JSON.
-Кожен об'єкт має поля: ${fields.join(", ")}.
+Кожен об'єкт має поля: bank, date, status, metric, value.
 Твоє завдання:
-- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з відповідного поля.
+- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з поля "value".
 - Якщо даних немає, чітко скажи "Немає даних".
 - Не вигадуй значення, використовуй лише те, що є у JSON.`
         },
@@ -47,6 +47,8 @@ app.post("/analyze", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("Error in /analyze:", err);
+
+    // завжди віддаємо JSON з помилкою, щоб браузер не блокував
     res.status(500).json({ error: err.message });
   }
 });
