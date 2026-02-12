@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+import fs from "fs";
 
 const app = express();
 
@@ -90,7 +91,12 @@ app.post("/chart", async (req, res) => {
       return res.status(500).json({ error: "Chart not generated" });
     }
 
-    const base64Image = buffer.toString("base64");
+    // більш надійна конвертація
+    const base64Image = Buffer.from(buffer).toString("base64");
+
+    // тимчасово можна зберегти файл для перевірки
+    // fs.writeFileSync("chart.png", buffer);
+
     res.json({ image: "data:image/png;base64," + base64Image });
   } catch (err) {
     console.error("Error generating chart:", err);
@@ -103,5 +109,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
-
-
