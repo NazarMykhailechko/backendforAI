@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.get("/", (req, res) => {
   res.send("Backend is running with CORS and large payload support!");
 });
 
+// GPT-аналіз
 app.post("/analyze", async (req, res) => {
   try {
     const { message, data, fields } = req.body;
@@ -51,29 +53,50 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+// ChartJSNodeCanvas з фоном і шрифтом
+const chartJSNodeCanvas = new ChartJSNodeCanvas({
+  width: 600,
+  height: 400,
+  backgroundColour: "white",
+  chartCallback: (ChartJS) => {
+    ChartJS.defaults.font.family = "Arial";
+  }
+});
 
-const chartJSNodeCanvas = new ChartJSNodeCanvas({ width: 600, height: 400 });
-
+// маршрут для графіка
 app.post("/chart", async (req, res) => {
   try {
     const { labels, datasets } = req.body;
 
     const config = {
       type: "line",
-      data: { labels, datasets }
+      data: {
+        labels: labels || ["A", "B", "C"],
+        datasets: datasets || [
+          { label: "Test", data: [1, 2, 3], borderColor: "blue", fill: false }
+        ]
+      },
+      options: {
+        responsive: false,
+        plugins: {
+          legend: { display: true }
+        }
+      }
     };
 
     const buffer = await chartJSNodeCanvas.renderToBuffer(config);
-    const base64Image = buffer.toString("base64");
 
+    if (!buffer || buffer.length === 0) {
+      return res.status(500).json({ error: "Chart not generated" });
+    }
+
+    const base64Image = buffer.toString("base64");
     res.json({ image: "data:image/png;base64," + base64Image });
   } catch (err) {
     console.error("Error generating chart:", err);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // слухаємо порт із Railway
 const PORT = process.env.PORT || 3000;
