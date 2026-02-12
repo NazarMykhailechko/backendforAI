@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
 import { ChartJSNodeCanvas } from "chartjs-node-canvas";
-import fs from "fs";
 
 const app = express();
 
@@ -85,19 +84,10 @@ app.post("/chart", async (req, res) => {
       }
     };
 
-    const buffer = await chartJSNodeCanvas.renderToBuffer(config);
+    // Використовуємо renderToDataURL замість renderToBuffer
+    const dataUrl = await chartJSNodeCanvas.renderToDataURL(config);
 
-    if (!buffer || buffer.length === 0) {
-      return res.status(500).json({ error: "Chart not generated" });
-    }
-
-    // більш надійна конвертація
-    const base64Image = Buffer.from(buffer).toString("base64");
-
-    // тимчасово можна зберегти файл для перевірки
-    // fs.writeFileSync("chart.png", buffer);
-
-    res.json({ image: "data:image/png;base64," + base64Image });
+    res.json({ image: dataUrl });
   } catch (err) {
     console.error("Error generating chart:", err);
     res.status(500).json({ error: err.message });
