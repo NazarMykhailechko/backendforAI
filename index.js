@@ -51,8 +51,34 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+
+const chartJSNodeCanvas = new ChartJSNodeCanvas({ width: 600, height: 400 });
+
+app.post("/chart", async (req, res) => {
+  try {
+    const { labels, datasets } = req.body;
+
+    const config = {
+      type: "line",
+      data: { labels, datasets }
+    };
+
+    const buffer = await chartJSNodeCanvas.renderToBuffer(config);
+    const base64Image = buffer.toString("base64");
+
+    res.json({ image: "data:image/png;base64," + base64Image });
+  } catch (err) {
+    console.error("Error generating chart:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // слухаємо порт із Railway
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
+
+
