@@ -1,6 +1,6 @@
 FROM node:18
 
-# Встановлюємо системні бібліотеки для node-canvas + шрифти
+# Встановлюємо системні бібліотеки для node-canvas + всі базові шрифти
 RUN apt-get update && apt-get install -y \
     libcairo2 \
     libpango-1.0-0 \
@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     fontconfig \
     fonts-dejavu-core \
+    fonts-liberation \
+    fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
