@@ -1,9 +1,0 @@
-{
-  "aptPackages": [
-    "libcairo2",
-    "libpango-1.0-0",
-    "libjpeg62-turbo",
-    "libgif7",
-    "libpng-dev"
-  ]
-}
