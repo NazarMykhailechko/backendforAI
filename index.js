@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+import WebSocket from "ws";   // ✅ додали для роботи з Qlik Engine API
 
 const app = express();
 
@@ -22,10 +22,49 @@ app.get("/", (req, res) => {
   res.send("Backend is running with CORS and large payload support!");
 });
 
-// GPT-аналіз
+// ✅ новий маршрут для отримання iframe-URL з Qlik
+app.get("/objects", (req, res) => {
+  const appId = "a390468b-1485-4d0e-8aab-94520946a80c"; // твій appid
+  const qlikServer = "bi_qlik.accordbank.com.ua";
+  const ticket = req.query.ticket; // передаємо qlikTicket через параметр
+
+  const ws = new WebSocket(`wss://${qlikServer}/app/${appId}?qlikTicket=${ticket}`);
+
+  ws.on("open", () => {
+    const request = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "GetObjects",
+      handle: -1,
+      params: [{ qTypes: ["chart", "table", "pivot", "filterpane", "kpi"] }]
+    };
+    ws.send(JSON.stringify(request));
+  });
+
+  ws.on("message", (msg) => {
+    const data = JSON.parse(msg);
+    if (data.result) {
+      const objects = data.result.qList.map(obj => {
+        const objId = obj.qInfo.qId;
+        const title = obj.qMeta.title;
+        const iframeUrl = `https://${qlikServer}/single/?appid=${appId}&obj=${objId}&theme=sense&opt=ctxmenu,currsel`;
+        return { title, iframeUrl };
+      });
+      res.json(objects);
+      ws.close();
+    }
+  });
+
+  ws.on("error", (err) => {
+    console.error("Qlik Engine API error:", err);
+    res.status(500).json({ error: err.message });
+  });
+});
+
+// твій існуючий маршрут /analyze лишаємо без змін
 app.post("/analyze", async (req, res) => {
   try {
-    const { message, data, fields } = req.body;
+    const { message, data } = req.body;
 
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -34,9 +73,9 @@ app.post("/analyze", async (req, res) => {
           role: "system",
           content: `Ти асистент для користувачів Qlik.
 У тебе є набір даних у форматі JSON.
-Кожен об'єкт має поля: ${fields.join(", ")}.
+Кожен об'єкт має поля: bank, date, status, metric, value.
 Твоє завдання:
-- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з відповідного поля.
+- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з поля "value".
 - Якщо даних немає, чітко скажи "Немає даних".
 - Не вигадуй значення, використовуй лише те, що є у JSON.`
         },
@@ -49,47 +88,6 @@ app.post("/analyze", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("Error in /analyze:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ChartJSNodeCanvas з фоном і шрифтом
-const chartJSNodeCanvas = new ChartJSNodeCanvas({
-  width: 600,
-  height: 400,
-  backgroundColour: "white",
-  chartCallback: (ChartJS) => {
-    ChartJS.defaults.font.family = "Arial";
-  }
-});
-
-// маршрут для графіка
-app.post("/chart", async (req, res) => {
-  try {
-    const { labels, datasets } = req.body;
-
-    const config = {
-      type: "line",
-      data: {
-        labels: labels || ["A", "B", "C"],
-        datasets: datasets || [
-          { label: "Test", data: [1, 2, 3], borderColor: "blue", fill: false }
-        ]
-      },
-      options: {
-        responsive: false,
-        plugins: {
-          legend: { display: true }
-        }
-      }
-    };
-
-    // Використовуємо renderToDataURL замість renderToBuffer
-    const dataUrl = await chartJSNodeCanvas.renderToDataURL(config);
-
-    res.json({ image: dataUrl });
-  } catch (err) {
-    console.error("Error generating chart:", err);
     res.status(500).json({ error: err.message });
   }
 });
