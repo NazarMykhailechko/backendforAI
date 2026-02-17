@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
-import WebSocket from "ws";   // ✅ додали для роботи з Qlik Engine API
 
 const app = express();
 
@@ -22,46 +21,7 @@ app.get("/", (req, res) => {
   res.send("Backend is running with CORS and large payload support!");
 });
 
-// ✅ новий маршрут для отримання iframe-URL з Qlik
-app.get("/objects", (req, res) => {
-  const appId = "a390468b-1485-4d0e-8aab-94520946a80c"; // твій appid
-  const qlikServer = "bi_qlik.accordbank.com.ua";
-  const ticket = req.query.ticket; // передаємо qlikTicket через параметр
-
-  const ws = new WebSocket(`wss://${qlikServer}/app/${appId}?qlikTicket=${ticket}`);
-
-  ws.on("open", () => {
-    const request = {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "GetObjects",
-      handle: -1,
-      params: [{ qTypes: ["chart", "table", "pivot", "filterpane", "kpi"] }]
-    };
-    ws.send(JSON.stringify(request));
-  });
-
-  ws.on("message", (msg) => {
-    const data = JSON.parse(msg);
-    if (data.result) {
-      const objects = data.result.qList.map(obj => {
-        const objId = obj.qInfo.qId;
-        const title = obj.qMeta.title;
-        const iframeUrl = `https://${qlikServer}/single/?appid=${appId}&obj=${objId}&theme=sense&opt=ctxmenu,currsel`;
-        return { title, iframeUrl };
-      });
-      res.json(objects);
-      ws.close();
-    }
-  });
-
-  ws.on("error", (err) => {
-    console.error("Qlik Engine API error:", err);
-    res.status(500).json({ error: err.message });
-  });
-});
-
-// твій існуючий маршрут /analyze лишаємо без змін
+//Кожен об'єкт має поля: bank, date, status, metric, value.
 app.post("/analyze", async (req, res) => {
   try {
     const { message, data } = req.body;
@@ -73,9 +33,9 @@ app.post("/analyze", async (req, res) => {
           role: "system",
           content: `Ти асистент для користувачів Qlik.
 У тебе є набір даних у форматі JSON.
-Кожен об'єкт має поля: bank, date, status, metric, value.
+Кожен об'єкт має поля, які передані окремо у масиві "fields".
 Твоє завдання:
-- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне число з поля "value".
+- Якщо питання користувача стосується цих даних, знайди відповідний об'єкт і дай точне значення з відповідного поля (назви полів передані у масиві "fields").
 - Якщо даних немає, чітко скажи "Немає даних".
 - Не вигадуй значення, використовуй лише те, що є у JSON.`
         },
@@ -88,6 +48,8 @@ app.post("/analyze", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("Error in /analyze:", err);
+
+    // завжди віддаємо JSON з помилкою, щоб браузер не блокував
     res.status(500).json({ error: err.message });
   }
 });
