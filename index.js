@@ -17,6 +17,12 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// простий маршрут для перевірки
+app.get("/", (req, res) => {
+  res.send("Backend is running with CORS and large payload support!");
+});
+
+
 // Словник стилів із варіантами + тематичні емодзі
 const vizPrompts = {
   "table": [
@@ -134,7 +140,8 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
-// Запуск сервера
-app.listen(3000, () => {
-  console.log("Backend running on port 3000");
+// слухаємо порт із Railway
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
 });
