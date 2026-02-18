@@ -191,13 +191,15 @@ const prompt = `
 
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: "Ти аналітичний асистент для Qlik Sense." },
-        { role: "user", content: prompt }
-      ]
-    });
+const response = await client.chat.completions.create({
+  model: "gpt-4.1-mini",
+  messages: [
+    { role: "system", content: prompt }, // інструкції
+    { role: "user", content: message },  // реальний запит користувача
+    { role: "assistant", content: "Ось дані:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) }
+  ]
+});
+
 
     const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
     res.json({ reply });
