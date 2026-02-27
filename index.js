@@ -168,7 +168,7 @@ app.post("/analyze", async (req, res) => {
   const { message, data, fields, vizType, metadata } = req.body;
 
   // Логування для діагностики
-  console.log("Received body:", req.body);
+  //console.log("Received body:", req.body);
 
   // Автоматичний вибір стилю
   const styleHint = pickPrompt(vizType);
