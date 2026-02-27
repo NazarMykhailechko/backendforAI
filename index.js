@@ -169,6 +169,7 @@ app.post("/analyze", async (req, res) => {
 
   // Логування для діагностики
   //console.log("Received body:", req.body);
+  //без логів
 
   // Автоматичний вибір стилю
   const styleHint = pickPrompt(vizType);
