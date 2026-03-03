@@ -19,7 +19,6 @@ const client = new OpenAI({
 });
 
 // ✅ Ініціалізація DuckDB
-// Файл має бути у репозиторії, щоб Railway його бачив
 const db = new duckdb.Database('/app/bank.duckdb');
 
 // простий маршрут для перевірки
@@ -161,7 +160,6 @@ const vizPrompts = {
     "Результати показують 📊"
   ]
 };
-
 // Функція вибору випадкового варіанту
 function pickPrompt(type) {
   const options = vizPrompts[type] || vizPrompts["default"];
@@ -170,11 +168,18 @@ function pickPrompt(type) {
 
 // ✅ Новий endpoint для тесту роботи з DuckDB
 app.get("/balance", (req, res) => {
-  const date = req.query.date || "2026-01-01";
-  db.all(`SELECT * FROM bank_balance WHERE date='${date}'`, (err, rows) => {
-    if (err) return res.status(500).send(err);
-    res.json(rows);
-  });
+  const queryDate = req.query.date || "2026-01-01";
+
+  // універсальний запит: працює і з YYYY-MM-DD, і з dd.mm.yyyy
+  db.all(
+    `SELECT * 
+     FROM bank_balance 
+     WHERE date = CAST('${queryDate}' AS DATE)`,
+    (err, rows) => {
+      if (err) return res.status(500).send(err);
+      res.json(rows);
+    }
+  );
 });
 
 // Основний endpoint
@@ -193,10 +198,15 @@ app.post("/analyze", async (req, res) => {
   let duckdbText = "";
   try {
     const rows = await new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM bank_balance WHERE date='${queryDate}'`, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
+      db.all(
+        `SELECT * 
+         FROM bank_balance 
+         WHERE date = CAST('${queryDate}' AS DATE)`,
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
     });
 
     duckdbText = rows.map(
@@ -206,7 +216,6 @@ app.post("/analyze", async (req, res) => {
     console.error("DuckDB error:", err);
     duckdbText = "Помилка при читанні з DuckDB";
   }
-
 
   const prompt = `
 Ти аналітичний асистент для Qlik Sense.
@@ -222,27 +231,24 @@ app.post("/analyze", async (req, res) => {
 - Якщо користувач просить "executive summary": відповідай стисло, діловим стилем, з короткими рекомендаціями.
 `;
 
-try {
-  const response = await client.chat.completions.create({
-    model: "gpt-4.1-mini",
-    messages: [
-      { role: "system", content: prompt },
-      { role: "user", content: message },
-      // ✅ гіперкуб передаємо як JSON
-      { role: "assistant", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
-      // ✅ DuckDB додаємо окремим текстовим блоком
-      { role: "assistant", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
-    ]
-  });
+  try {
+    const response = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: message },
+        { role: "assistant", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
+        { role: "assistant", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
+      ]
+    });
 
-  const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
-  res.json({ reply });
-} catch (error) {
-  console.error("Error calling OpenAI:", error);
-  res.status(500).json({ error: "Помилка при виклику моделі" });
-}
+    const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
+    res.json({ reply });
+  } catch (error) {
+    console.error("Error calling OpenAI:", error);
+    res.status(500).json({ error: "Помилка при виклику моделі" });
+  }
 });
-
 
 // слухаємо порт із Railway
 const PORT = process.env.PORT || 3000;
