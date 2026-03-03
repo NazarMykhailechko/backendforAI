@@ -174,7 +174,8 @@ app.get("/balance", (req, res) => {
 db.all(
   `SELECT * 
    FROM bank_balance 
-   WHERE date = CAST('${queryDate}' AS DATE)`,
+   --WHERE date = CAST('${queryDate}' AS DATE)
+   `,
   (err, rows) => {
     if (err) return res.status(500).send(err);
           // 👇 тут додаєш логування
@@ -201,7 +202,9 @@ app.post("/analyze", async (req, res) => {
   try {
     const rows = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM bank_balance WHERE date = CAST('${queryDate}' AS DATE)`,
+        `SELECT * FROM bank_balance 
+		--WHERE date = CAST('${queryDate}' AS DATE)
+		`,
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
