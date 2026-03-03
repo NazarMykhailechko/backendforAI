@@ -237,12 +237,13 @@ app.post("/analyze", async (req, res) => {
   try {
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: message },
-        { role: "assistant", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
-        { role: "assistant", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
-      ]
+messages: [
+  { role: "system", content: prompt },
+  { role: "user", content: message },
+  { role: "user", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
+  { role: "user", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
+]
+
     });
 
     const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
