@@ -173,9 +173,7 @@ app.get("/balance", (req, res) => {
   // універсальний запит: працює і з YYYY-MM-DD, і з dd.mm.yyyy
 db.all(
   `SELECT * 
-   FROM bank_balance 
-   --WHERE date = CAST('${queryDate}' AS DATE)
-   `,
+   FROM bank_balance`,
   (err, rows) => {
     if (err) return res.status(500).send(err);
           // 👇 тут додаєш логування
@@ -202,9 +200,7 @@ app.post("/analyze", async (req, res) => {
   try {
     const rows = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM bank_balance 
-		--WHERE date = CAST('${queryDate}' AS DATE)
-		`,
+        `SELECT * FROM bank_balance`,
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
