@@ -196,7 +196,7 @@ app.post("/analyze", async (req, res) => {
     row => fields.map((f, i) => `${f}: ${row[i]}`).join(", ")
   ).join("\n");
 
-  const queryDate = date || "2026-01-01";
+  const queryDate = date;
   let duckdbText = "";
   try {
     const rows = await new Promise((resolve, reject) => {
