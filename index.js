@@ -207,14 +207,6 @@ app.post("/analyze", async (req, res) => {
     duckdbText = "Помилка при читанні з DuckDB";
   }
 
-  // ✅ Формуємо єдиний контекст
-  const contextText = `
-Дані з гіперкубу (користувач вибрав у дашборді):
-${hypercubeText}
-
-Допоміжні дані з DuckDB (RAG):
-${duckdbText}
-`;
 
   const prompt = `
 Ти аналітичний асистент для Qlik Sense.
@@ -230,23 +222,26 @@ ${duckdbText}
 - Якщо користувач просить "executive summary": відповідай стисло, діловим стилем, з короткими рекомендаціями.
 `;
 
-  try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: message },
-        { role: "assistant", content: "Ось контекст:\n" + contextText }
-      ]
-    });
+try {
+  const response = await client.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [
+      { role: "system", content: prompt },
+      { role: "user", content: message },
+      // ✅ гіперкуб передаємо як JSON
+      { role: "assistant", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
+      // ✅ DuckDB додаємо окремим текстовим блоком
+      { role: "assistant", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
+    ]
+  });
 
-    const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
-    res.json({ reply });
-  } catch (error) {
-    console.error("Error calling OpenAI:", error);
-    res.status(500).json({ error: "Помилка при виклику моделі" });
-  }
-});
+  const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
+  res.json({ reply });
+} catch (error) {
+  console.error("Error calling OpenAI:", error);
+  res.status(500).json({ error: "Помилка при виклику моделі" });
+}
+
 
 // слухаємо порт із Railway
 const PORT = process.env.PORT || 3000;
