@@ -171,43 +171,46 @@ app.get("/balance", (req, res) => {
   const queryDate = req.query.date || "2026-01-01";
 
   // універсальний запит: працює і з YYYY-MM-DD, і з dd.mm.yyyy
-  db.all(
-    `SELECT * 
-     FROM bank_balance 
-     WHERE date = CAST('${queryDate}' AS DATE)`,
-    (err, rows) => {
-      if (err) return res.status(500).send(err);
-      res.json(rows);
-    }
-  );
+db.all(
+  `SELECT * 
+   FROM bank_balance 
+   WHERE date = CAST('${queryDate}' AS DATE)`,
+  (err, rows) => {
+    if (err) return res.status(500).send(err);
+          // 👇 тут додаєш логування
+      console.log("Query date:", queryDate);
+      console.log("DuckDB rows:", rows);
+
+    res.json(rows);
+  }
+);
+
 });
 
 // Основний endpoint
 app.post("/analyze", async (req, res) => {
   const { message, data, fields, vizType, metadata, date } = req.body;
-
   const styleHint = pickPrompt(vizType);
 
-  // ✅ Перетворюємо гіперкуб у текст
   const hypercubeText = data.map(
     row => fields.map((f, i) => `${f}: ${row[i]}`).join(", ")
   ).join("\n");
 
-  // ✅ Витягуємо допоміжні дані з DuckDB
   const queryDate = date || "2026-01-01";
   let duckdbText = "";
   try {
     const rows = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * 
-         FROM bank_balance 
-         WHERE date = CAST('${queryDate}' AS DATE)`,
+        `SELECT * FROM bank_balance WHERE date = CAST('${queryDate}' AS DATE)`,
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         }
       );
     });
+
+    console.log("Query date:", queryDate);
+    console.log("DuckDB rows:", rows);
 
     duckdbText = rows.map(
       r => `${r.date}: ${r.label} (${r.code}) = ${r.value}`
