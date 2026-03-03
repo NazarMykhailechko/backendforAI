@@ -168,7 +168,7 @@ function pickPrompt(type) {
 
 // ✅ Новий endpoint для тесту роботи з DuckDB
 app.get("/balance", (req, res) => {
-  const queryDate = req.query.date || "2026-01-01";
+  const queryDate = req.query.date;
 
   // універсальний запит: працює і з YYYY-MM-DD, і з dd.mm.yyyy
 db.all(
