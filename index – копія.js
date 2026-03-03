@@ -168,31 +168,45 @@ app.post("/analyze", async (req, res) => {
   const { message, data, fields, vizType, metadata } = req.body;
 
   // Логування для діагностики
-  console.log("Received body:", req.body);
+  //console.log("Received body:", req.body);
+  //без логів
 
   // Автоматичний вибір стилю
   const styleHint = pickPrompt(vizType);
 
   // Формуємо промпт для моделі
-  const prompt = `
-    Користувач написав: "${message}".
-    Дані: ${JSON.stringify(data)}.
-    Поля: ${fields.join(", ")}.
-    Тип візуалізації: ${vizType}.
-    
-    Опиши дані так, ніби ти бачиш ${vizType}.
-    Використовуй стиль у дусі: "${styleHint}", але варіюй формулювання.
-    Додавай тематичні емодзі доречно (📊, 📈, 🗺️, 🎯, 📝, 🖼️), щоб зробити відповідь живою.
-  `;
+const prompt = `
+Ти аналітичний асистент для Qlik Sense.
+У тебе є набір даних у форматі JSON (змінна "data") та список полів (масив "fields").
+Також відомий тип візуалізації (${vizType}).
+
+Правила:
+- Якщо повідомлення користувача є загальним (наприклад, привітання чи small talk), відповідай дружньо як асистент, можеш додати відповідні емодзі (👋, 😊, 👍 тощо).
+- Якщо повідомлення стосується даних, аналізуй їх, використовуючи "data" та "fields", і відповідай так, ніби ти бачиш візуалізацію типу "${vizType}".
+- Використовуй стиль у дусі: "${styleHint}", але варіюй формулювання.
+- Якщо даних немає, чітко скажи "Немає даних".
+- Не вигадуй значення, використовуй лише те, що є у JSON.
+- Додавай емодзі на власний розсуд, але помірно: лише там, де вони справді підсилюють зміст.
+- Якщо в даних є поле LOGO (посилання на логотип), завжди відображай його біля назви відповідного об’єкта у форматі: <img src="LOGO_URL" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;" alt="іконка"> OBJECT_NAME. Якщо поле LOGO порожнє — показуй тільки назву об’єкта.
+- Якщо користувач просить "executive summary":
+   * Відповідай стисло (3–4 речення).
+   * Використовуй діловий стиль, без зайвих деталей.
+   * Додай короткий блок рекомендацій (2–3 пункти).
+   * Не вставляй таблиці чи довгі списки, тільки ключові висновки.
+`;
+
+
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: "Ти аналітичний асистент для Qlik Sense." },
-        { role: "user", content: prompt }
-      ]
-    });
+const response = await client.chat.completions.create({
+  model: "gpt-4.1-mini",
+  messages: [
+    { role: "system", content: prompt }, // інструкції
+    { role: "user", content: message },  // реальний запит користувача
+    { role: "assistant", content: "Ось дані:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) }
+  ]
+});
+
 
     const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
     res.json({ reply });
