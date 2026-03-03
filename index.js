@@ -241,6 +241,7 @@ try {
   console.error("Error calling OpenAI:", error);
   res.status(500).json({ error: "Помилка при виклику моделі" });
 }
+});
 
 
 // слухаємо порт із Railway
