@@ -191,36 +191,38 @@ app.post("/analyze", async (req, res) => {
   const { message, date } = req.body;
 
   const query = `
-    WITH bond_stats AS (
-      SELECT AVG(yield) AS avg_yield,
-             MIN(maturity_date) AS nearest_maturity,
-             MAX(maturity_date) AS furthest_maturity,
-             SUM(amount) AS total_bonds
-      FROM gov_bonds
-    ),
-    macro AS (
-      SELECT nbu_rate, inflation
-      FROM macro_indicators
-      WHERE date = '${date}'
-    ),
-    lcr AS (
-      SELECT lcr_all, lcr_fx
-      FROM nbu_lcr
-      WHERE date = '${date}'
-    )
-    SELECT 
-      bond_stats.avg_yield,
-      bond_stats.nearest_maturity,
-      bond_stats.furthest_maturity,
-      bond_stats.total_bonds,
-      23537328.0473 AS total_assets,
-      bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
-      macro.nbu_rate,
-      macro.inflation,
-      bond_stats.avg_yield - macro.inflation AS real_yield,
-      lcr.lcr_all,
-      lcr.lcr_fx
-    FROM bond_stats, macro, lcr;
+   WITH bond_stats AS (
+  SELECT AVG(yield) AS avg_yield,
+         MIN(maturity_date) AS nearest_maturity,
+         MAX(maturity_date) AS furthest_maturity,
+         SUM(amount) AS total_bonds
+  FROM gov_bonds
+),
+macro AS (
+  SELECT nbu_rate, inflation
+  FROM macro_indicators
+  ORDER BY date DESC
+  LIMIT 1
+),
+lcr AS (
+  SELECT lcr_all, lcr_fx
+  FROM nbu_lcr
+  ORDER BY date DESC
+  LIMIT 1
+)
+SELECT 
+  bond_stats.avg_yield,
+  bond_stats.nearest_maturity,
+  bond_stats.furthest_maturity,
+  bond_stats.total_bonds,
+  23537328.0473 AS total_assets,
+  bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
+  macro.nbu_rate,
+  macro.inflation,
+  bond_stats.avg_yield - macro.inflation AS real_yield,
+  lcr.lcr_all,
+  lcr.lcr_fx
+FROM bond_stats, macro, lcr;
   `;
 
   try {
