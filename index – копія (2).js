@@ -188,67 +188,68 @@ db.all(
 
 // Основний endpoint
 app.post("/analyze", async (req, res) => {
-  const { message, date } = req.body;
+  const { message, data, fields, vizType, metadata, date } = req.body;
+  const styleHint = pickPrompt(vizType);
 
-  // універсальний SQL для KPI
-  const query = `
-    WITH bond_stats AS (
-      SELECT AVG(yield) AS avg_yield,
-             MIN(maturity_date) AS nearest_maturity,
-             MAX(maturity_date) AS furthest_maturity,
-             SUM(amount) AS total_bonds
-      FROM gov_bonds
-    ),
-    macro AS (
-      SELECT nbu_rate, inflation
-      FROM macro_indicators
-      WHERE date = '${date}'
-    ),
-    lcr AS (
-      SELECT lcr_all, lcr_fx
-      FROM nbu_lcr
-      WHERE date = '${date}'
-    )
-    SELECT 
-      bond_stats.avg_yield,
-      bond_stats.nearest_maturity,
-      bond_stats.furthest_maturity,
-      bond_stats.total_bonds,
-      23537328.0473 AS total_assets,
-      bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
-      macro.nbu_rate,
-      macro.inflation,
-      bond_stats.avg_yield - macro.inflation AS real_yield,
-      lcr.lcr_all,
-      lcr.lcr_fx
-    FROM bond_stats, macro, lcr;
-  `;
+  const hypercubeText = data.map(
+    row => fields.map((f, i) => `${f}: ${row[i]}`).join(", ")
+  ).join("\n");
 
+  const queryDate = date;
+  let duckdbText = "";
   try {
     const rows = await new Promise((resolve, reject) => {
-      db.all(query, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
+      db.all(
+        `SELECT * FROM bank_balance`,
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
     });
 
-    const kpiJson = rows[0]; // агрегований результат
+    console.log("Query date:", queryDate);
+    console.log("DuckDB rows:", rows);
 
-    // передаємо модельці KPI + питання користувача
+    duckdbText = rows.map(
+      r => `${r.date}: ${r.label} (${r.code}) = ${r.value}`
+    ).join("\n");
+  } catch (err) {
+    console.error("DuckDB error:", err);
+    duckdbText = "Помилка при читанні з DuckDB";
+  }
+
+  const prompt = `
+Ти аналітичний асистент для Qlik Sense.
+У тебе є два джерела даних:
+1. Основні дані з гіперкубу (користувач вибрав у дашборді).
+2. Допоміжні дані з DuckDB (RAG).
+
+Правила:
+- Використовуй гіперкуб як основне джерело для відповіді.
+- Дані з DuckDB використовуй лише як довідкові, щоб доповнити аналіз або дати контекст.
+- Якщо є суперечності — пріоритет має гіперкуб.
+- Використовуй стиль у дусі: "${styleHint}".
+- Якщо користувач просить "executive summary": відповідай стисло, діловим стилем, з короткими рекомендаціями.
+`;
+
+  try {
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: "Ти фінансовий аналітичний асистент для банку. Використовуй KPI з бекенду для відповіді." },
-        { role: "user", content: message },
-        { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
-      ]
+messages: [
+  { role: "system", content: prompt },
+  { role: "user", content: message },
+  { role: "user", content: "Ось дані з гіперкубу:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) },
+  { role: "user", content: "Допоміжні дані з DuckDB:\n" + duckdbText }
+]
+
     });
 
     const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
-    res.json({ kpi: kpiJson, reply });
+    res.json({ reply });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Помилка при аналізі" });
+    console.error("Error calling OpenAI:", error);
+    res.status(500).json({ error: "Помилка при виклику моделі" });
   }
 });
 
