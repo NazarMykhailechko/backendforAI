@@ -188,42 +188,42 @@ db.all(
 
 // Основний endpoint
 app.post("/analyze", async (req, res) => {
-  const { message, date } = req.body;
+  const { message } = req.body; // без дати
 
   const query = `
-   WITH bond_stats AS (
-  SELECT 
-    AVG(TRY_CAST(REPLACE(effective_yield, ',', '.') AS DOUBLE)) AS avg_yield,
-    MIN(maturity_date) AS nearest_maturity,
-    MAX(maturity_date) AS furthest_maturity,
-    SUM(TRY_CAST(REPLACE(amount, ',', '.') AS DOUBLE)) AS total_bonds
-  FROM gov_bonds
-),
-macro AS (
-  SELECT nbu_rate, inflation
-  FROM macro_indicators
-  ORDER BY date DESC
-  LIMIT 1
-),
-lcr AS (
-  SELECT lcr_all, lcr_fx
-  FROM nbu_lcr
-  ORDER BY date DESC
-  LIMIT 1
-)
-SELECT 
-  bond_stats.avg_yield,
-  bond_stats.nearest_maturity,
-  bond_stats.furthest_maturity,
-  bond_stats.total_bonds,
-  23537328.0473 AS total_assets,
-  bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
-  macro.nbu_rate,
-  macro.inflation,
-  bond_stats.avg_yield - macro.inflation AS real_yield,
-  lcr.lcr_all,
-  lcr.lcr_fx
-FROM bond_stats, macro, lcr;
+    WITH bond_stats AS (
+      SELECT 
+        AVG(TRY_CAST(REPLACE(effective_yield, ',', '.') AS DOUBLE)) AS avg_yield,
+        MIN(maturity_date) AS nearest_maturity,
+        MAX(maturity_date) AS furthest_maturity,
+        SUM(TRY_CAST(REPLACE(amount, ',', '.') AS DOUBLE)) AS total_bonds
+      FROM gov_bonds
+    ),
+    macro AS (
+      SELECT nbu_rate, inflation
+      FROM macro_indicators
+      ORDER BY date DESC
+      LIMIT 1
+    ),
+    lcr AS (
+      SELECT lcr_all, lcr_fx
+      FROM nbu_lcr
+      ORDER BY date DESC
+      LIMIT 1
+    )
+    SELECT 
+      bond_stats.avg_yield,
+      bond_stats.nearest_maturity,
+      bond_stats.furthest_maturity,
+      bond_stats.total_bonds,
+      23537328.0473 AS total_assets,
+      bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
+      macro.nbu_rate,
+      macro.inflation,
+      bond_stats.avg_yield - macro.inflation AS real_yield,
+      lcr.lcr_all,
+      lcr.lcr_fx
+    FROM bond_stats, macro, lcr;
   `;
 
   try {
@@ -234,27 +234,47 @@ FROM bond_stats, macro, lcr;
       });
     });
 
-    const kpiJson = rows[0];
-
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: "Ти фінансовий аналітичний асистент для банку. Використовуй KPI з бекенду для відповіді. Дай короткий висновок і рекомендацію." },
-        { role: "user", content: message },
-        { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
-      ]
-    });
-
-    // reply завжди рядок
-    let replyText = response.choices?.[0]?.message?.content;
-    if (!replyText || typeof replyText !== "string") {
-      replyText = "Помилка: немає відповіді від моделі";
+    if (!rows || rows.length === 0) {
+      return res.json({ summary: "❌ Немає даних у DuckDB", details: "", recommendation: "" });
     }
 
-    res.json({ kpi: kpiJson, reply: String(replyText) });
+    const kpiJson = rows[0];
+
+    let replyJson = { summary: "❌ Помилка", details: "", recommendation: "" };
+    try {
+      const response = await client.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "system", content: `
+Ти фінансовий аналітичний асистент для банку.
+Використовуй KPI з бекенду для відповіді.
+Форматуй відповідь строго як JSON:
+{
+  "summary": "...",
+  "details": "...",
+  "recommendation": "..."
+}
+          ` },
+          { role: "user", content: message },
+          { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
+        ]
+      });
+
+      const rawReply = response?.choices?.[0]?.message?.content;
+      if (rawReply && typeof rawReply === "string") {
+        replyJson = JSON.parse(rawReply);
+      } else {
+        replyJson = { summary: "❌ Модель не повернула JSON", details: "", recommendation: "" };
+      }
+    } catch (e) {
+      console.error("OpenAI error:", e);
+      replyJson = { summary: "❌ Помилка при виклику OpenAI", details: "", recommendation: "" };
+    }
+
+    res.json({ kpi: kpiJson, ...replyJson });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Помилка при аналізі" });
+    console.error("DuckDB error:", error);
+    res.status(500).json({ summary: "❌ Помилка при аналізі", details: String(error), recommendation: "" });
   }
 });
 
