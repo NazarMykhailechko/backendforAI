@@ -190,7 +190,6 @@ db.all(
 app.post("/analyze", async (req, res) => {
   const { message, date } = req.body;
 
-  // універсальний SQL для KPI
   const query = `
     WITH bond_stats AS (
       SELECT AVG(yield) AS avg_yield,
@@ -232,20 +231,35 @@ app.post("/analyze", async (req, res) => {
       });
     });
 
-    const kpiJson = rows[0]; // агрегований результат
+    const kpiJson = rows[0];
 
-    // передаємо модельці KPI + питання користувача
+    // просимо модель повернути JSON з summary/details/recommendation
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: "Ти фінансовий аналітичний асистент для банку. Використовуй KPI з бекенду для відповіді." },
+        { role: "system", content: `
+Ти фінансовий аналітичний асистент для банку.
+Використовуй KPI з бекенду для відповіді.
+Форматуй відповідь строго як JSON:
+{
+  "summary": "...",
+  "details": "...",
+  "recommendation": "..."
+}
+        ` },
         { role: "user", content: message },
         { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
       ]
     });
 
-    const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
-    res.json({ kpi: kpiJson, reply });
+    let replyJson;
+    try {
+      replyJson = JSON.parse(response.choices?.[0]?.message?.content);
+    } catch (e) {
+      replyJson = { summary: "Помилка парсингу", details: "", recommendation: "" };
+    }
+
+    res.json({ kpi: kpiJson, ...replyJson });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Помилка при аналізі" });
