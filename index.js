@@ -233,24 +233,22 @@ app.post("/analyze", async (req, res) => {
 
     const kpiJson = rows[0];
 
-    // просимо модель дати відповідь у тексті
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: `
-Ти фінансовий аналітичний асистент для банку.
-Використовуй KPI з бекенду для відповіді.
-Дай короткий висновок і рекомендацію на основі KPI.
-        ` },
+        { role: "system", content: "Ти фінансовий аналітичний асистент для банку. Використовуй KPI з бекенду для відповіді. Дай короткий висновок і рекомендацію." },
         { role: "user", content: message },
         { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
       ]
     });
 
     // reply завжди рядок
-    const replyText = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
+    let replyText = response.choices?.[0]?.message?.content;
+    if (!replyText || typeof replyText !== "string") {
+      replyText = "Помилка: немає відповіді від моделі";
+    }
 
-    res.json({ kpi: kpiJson, reply: replyText });
+    res.json({ kpi: kpiJson, reply: String(replyText) });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Помилка при аналізі" });
