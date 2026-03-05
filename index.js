@@ -192,10 +192,11 @@ app.post("/analyze", async (req, res) => {
 
   const query = `
    WITH bond_stats AS (
-  SELECT AVG(yield) AS avg_yield,
-         MIN(maturity_date) AS nearest_maturity,
-         MAX(maturity_date) AS furthest_maturity,
-         SUM(amount) AS total_bonds
+  SELECT 
+    AVG(CAST(effective_yield AS DOUBLE)) AS avg_yield,
+    MIN(maturity_date) AS nearest_maturity,
+    MAX(maturity_date) AS furthest_maturity,
+    SUM(CAST(amount AS DOUBLE)) AS total_bonds
   FROM gov_bonds
 ),
 macro AS (
