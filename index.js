@@ -188,7 +188,7 @@ db.all(
 
 // Основний endpoint
 app.post("/analyze", async (req, res) => {
-  const { message } = req.body; // без дати
+  const { message } = req.body;
 
   const query = `
     WITH bond_stats AS (
@@ -235,12 +235,12 @@ app.post("/analyze", async (req, res) => {
     });
 
     if (!rows || rows.length === 0) {
-      return res.json({ summary: "❌ Немає даних у DuckDB", details: "", recommendation: "" });
+      return res.json({ kpi: {}, reply: "❌ Немає даних у DuckDB" });
     }
 
     const kpiJson = rows[0];
 
-    let replyJson = { summary: "❌ Помилка", details: "", recommendation: "" };
+    let replyText = "❌ Помилка: немає відповіді від моделі";
     try {
       const response = await client.chat.completions.create({
         model: "gpt-4.1-mini",
@@ -262,19 +262,27 @@ app.post("/analyze", async (req, res) => {
 
       const rawReply = response?.choices?.[0]?.message?.content;
       if (rawReply && typeof rawReply === "string") {
-        replyJson = JSON.parse(rawReply);
-      } else {
-        replyJson = { summary: "❌ Модель не повернула JSON", details: "", recommendation: "" };
+        let parsed;
+        try {
+          parsed = JSON.parse(rawReply);
+          replyText =
+            "Висновок: " + (parsed.summary || "") + "\n\n" +
+            "Деталі: " + (parsed.details || "") + "\n\n" +
+            "Рекомендація: " + (parsed.recommendation || "");
+        } catch (e) {
+          // якщо модель не повернула чистий JSON
+          replyText = rawReply;
+        }
       }
     } catch (e) {
       console.error("OpenAI error:", e);
-      replyJson = { summary: "❌ Помилка при виклику OpenAI", details: "", recommendation: "" };
+      replyText = "❌ Помилка при виклику OpenAI";
     }
 
-    res.json({ kpi: kpiJson, ...replyJson });
+    res.json({ kpi: kpiJson, reply: String(replyText) });
   } catch (error) {
     console.error("DuckDB error:", error);
-    res.status(500).json({ summary: "❌ Помилка при аналізі", details: String(error), recommendation: "" });
+    res.status(500).json({ reply: "❌ Помилка при аналізі: " + String(error) });
   }
 });
 
