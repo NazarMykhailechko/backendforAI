@@ -233,33 +233,24 @@ app.post("/analyze", async (req, res) => {
 
     const kpiJson = rows[0];
 
-    // просимо модель повернути JSON з summary/details/recommendation
+    // просимо модель дати відповідь у тексті
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: `
 Ти фінансовий аналітичний асистент для банку.
 Використовуй KPI з бекенду для відповіді.
-Форматуй відповідь строго як JSON:
-{
-  "summary": "...",
-  "details": "...",
-  "recommendation": "..."
-}
+Дай короткий висновок і рекомендацію на основі KPI.
         ` },
         { role: "user", content: message },
         { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
       ]
     });
 
-    let replyJson;
-    try {
-      replyJson = JSON.parse(response.choices?.[0]?.message?.content);
-    } catch (e) {
-      replyJson = { summary: "Помилка парсингу", details: "", recommendation: "" };
-    }
+    // reply завжди рядок
+    const replyText = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
 
-    res.json({ kpi: kpiJson, ...replyJson });
+    res.json({ kpi: kpiJson, reply: replyText });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Помилка при аналізі" });
