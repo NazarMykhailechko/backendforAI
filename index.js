@@ -196,7 +196,8 @@ app.post("/analyze", async (req, res) => {
         AVG(TRY_CAST(REPLACE(effective_yield, ',', '.') AS DOUBLE)) AS avg_yield,
         MIN(maturity_date) AS nearest_maturity,
         MAX(maturity_date) AS furthest_maturity,
-        SUM(TRY_CAST(REPLACE(amount, ',', '.') AS DOUBLE)) AS total_bonds
+		SUM(TRY_CAST(REPLACE(REPLACE(amount, ',', '.'), ' ', '') AS DOUBLE)) AS total_bonds
+
       FROM gov_bonds
     ),
     macro AS (
@@ -238,7 +239,10 @@ app.post("/analyze", async (req, res) => {
       return res.json({ kpi: {}, reply: "❌ Немає даних у DuckDB" });
     }
 
-    const kpiJson = rows[0];
+	// ✅ ось тут вставляємо
+const kpiJson = rows[0];
+kpiJson.ovdp_share = kpiJson.ovdp_share || 0; // якщо NULL, ставимо 0
+
 
     let replyText = "❌ Помилка: немає відповіді від моделі";
     try {
@@ -247,7 +251,7 @@ app.post("/analyze", async (req, res) => {
         messages: [
           { role: "system", content: `
 Ти фінансовий аналітичний асистент для банку.
-Використовуй KPI з бекенду для відповіді.
+Використовуй KPI з бекенду для відповіді. Якщо у KPI є поле ovdp_share, обов’язково використовуй його у висновку як частку ОВДП у активах.
 Форматуй відповідь строго як JSON:
 {
   "summary": "...",
