@@ -230,7 +230,7 @@ SELECT
   lcr.lcr_fx
 FROM bond_stats, macro, lcr;
   `;
-
+/////
   try {
     const rows = await new Promise((resolve, reject) => {
       db.all(query, (err, rows) => {
