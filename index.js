@@ -195,7 +195,7 @@ const prompt = `
    * Не вставляй таблиці чи довгі списки, тільки ключові висновки.
 `;
 
-
+/////
 
   try {
 const response = await client.chat.completions.create({
