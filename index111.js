@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
+import duckdb from "duckdb";   // ✅ додаємо DuckDB
 
 const app = express();
 
@@ -17,9 +18,12 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// ✅ Ініціалізація DuckDB
+const db = new duckdb.Database('/app/bank.duckdb');
+
 // простий маршрут для перевірки
 app.get("/", (req, res) => {
-  res.send("Backend is running with CORS and large payload support!");
+  res.send("Backend is running with CORS, large payload support, and DuckDB!");
 });
 
 // Словник стилів із варіантами + тематичні емодзі
@@ -156,63 +160,137 @@ const vizPrompts = {
     "Результати показують 📊"
   ]
 };
-
 // Функція вибору випадкового варіанту
 function pickPrompt(type) {
   const options = vizPrompts[type] || vizPrompts["default"];
   return options[Math.floor(Math.random() * options.length)];
 }
 
-// Основний endpoint
-app.post("/analyze", async (req, res) => {
-  const { message, data, fields, vizType, metadata } = req.body;
+// ✅ Новий endpoint для тесту роботи з DuckDB
+app.get("/balance", (req, res) => {
+  const queryDate = req.query.date;
 
-  // Логування для діагностики
-  //console.log("Received body:", req.body);
-  //без логів
+  // універсальний запит: працює і з YYYY-MM-DD, і з dd.mm.yyyy
+db.all(
+  `SELECT * 
+   FROM bank_balance`,
+  (err, rows) => {
+    if (err) return res.status(500).send(err);
+          // 👇 тут додаєш логування
+      console.log("Query date:", queryDate);
+      console.log("DuckDB rows:", rows);
 
-  // Автоматичний вибір стилю
-  const styleHint = pickPrompt(vizType);
+    res.json(rows);
+  }
+);
 
-  // Формуємо промпт для моделі
-const prompt = `
-Ти аналітичний асистент для Qlik Sense.
-У тебе є набір даних у форматі JSON (змінна "data") та список полів (масив "fields").
-Також відомий тип візуалізації (${vizType}).
-
-Правила:
-- Якщо повідомлення користувача є загальним (наприклад, привітання чи small talk), відповідай дружньо як асистент, можеш додати відповідні емодзі (👋, 😊, 👍 тощо).
-- Якщо повідомлення стосується даних, аналізуй їх, використовуючи "data" та "fields", і відповідай так, ніби ти бачиш візуалізацію типу "${vizType}".
-- Використовуй стиль у дусі: "${styleHint}", але варіюй формулювання.
-- Якщо даних немає, чітко скажи "Немає даних".
-- Не вигадуй значення, використовуй лише те, що є у JSON.
-- Додавай емодзі на власний розсуд, але помірно: лише там, де вони справді підсилюють зміст.
-- Якщо в даних є поле LOGO (посилання на логотип), завжди відображай його біля назви відповідного об’єкта у форматі: <img src="LOGO_URL" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;" alt="іконка"> OBJECT_NAME. Якщо поле LOGO порожнє — показуй тільки назву об’єкта.
-- Якщо користувач просить "executive summary":
-   * Відповідай стисло (3–4 речення).
-   * Використовуй діловий стиль, без зайвих деталей.
-   * Додай короткий блок рекомендацій (2–3 пункти).
-   * Не вставляй таблиці чи довгі списки, тільки ключові висновки.
-`;
-
-
-
-  try {
-const response = await client.chat.completions.create({
-  model: "gpt-4.1-mini",
-  messages: [
-    { role: "system", content: prompt }, // інструкції
-    { role: "user", content: message },  // реальний запит користувача
-    { role: "assistant", content: "Ось дані:\n" + JSON.stringify(data) + "\nПоля:\n" + JSON.stringify(fields) }
-  ]
 });
 
+// Основний endpoint
+app.post("/analyze", async (req, res) => {
+  const { message } = req.body;
 
-    const reply = response.choices?.[0]?.message?.content || "Помилка: немає відповіді від моделі";
-    res.json({ reply });
+  const query = `
+    WITH bond_stats AS (
+  SELECT 
+    AVG(TRY_CAST(REPLACE(effective_yield, ',', '.') AS DOUBLE)) AS avg_yield,
+    MIN(maturity_date) AS nearest_maturity,
+    MAX(maturity_date) AS furthest_maturity,
+SUM(
+  TRY_CAST(
+    REPLACE(REPLACE(amount, ' ', ''), ',', '.') AS DOUBLE
+  )
+) AS total_bonds
+
+  FROM gov_bonds
+),
+macro AS (
+  SELECT nbu_rate, inflation
+  FROM macro_indicators
+  ORDER BY date DESC
+  LIMIT 1
+),
+lcr AS (
+  SELECT lcr_all, lcr_fx
+  FROM nbu_lcr
+  ORDER BY date DESC
+  LIMIT 1
+)
+SELECT 
+  bond_stats.avg_yield,
+  bond_stats.nearest_maturity,
+  bond_stats.furthest_maturity,
+  bond_stats.total_bonds,
+  23537328.0473 AS total_assets,
+  bond_stats.total_bonds * 100.0 / 23537328.0473 AS ovdp_share,
+  macro.nbu_rate,
+  macro.inflation,
+  bond_stats.avg_yield - macro.inflation AS real_yield,
+  lcr.lcr_all,
+  lcr.lcr_fx
+FROM bond_stats, macro, lcr;
+  `;
+/////
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(query, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    if (!rows || rows.length === 0) {
+      return res.json({ kpi: {}, reply: "❌ Немає даних у DuckDB" });
+    }
+
+	// ✅ ось тут вставляємо
+const kpiJson = rows[0];
+kpiJson.ovdp_share = kpiJson.ovdp_share || 0; // якщо NULL, ставимо 0
+
+
+    let replyText = "❌ Помилка: немає відповіді від моделі";
+    try {
+      const response = await client.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "system", content: `
+Ти фінансовий аналітичний асистент для банку.
+Використовуй KPI з бекенду для відповіді. Якщо у KPI є поле ovdp_share, обов’язково використовуй його у висновку як частку ОВДП у активах.
+Форматуй відповідь строго як JSON:
+{
+  "summary": "...",
+  "details": "...",
+  "recommendation": "..."
+}
+          ` },
+          { role: "user", content: message },
+          { role: "user", content: "Ось KPI з бекенду:\n" + JSON.stringify(kpiJson, null, 2) }
+        ]
+      });
+
+      const rawReply = response?.choices?.[0]?.message?.content;
+      if (rawReply && typeof rawReply === "string") {
+        let parsed;
+        try {
+          parsed = JSON.parse(rawReply);
+          replyText =
+            "Висновок: " + (parsed.summary || "") + "\n\n" +
+            "Деталі: " + (parsed.details || "") + "\n\n" +
+            "Рекомендація: " + (parsed.recommendation || "");
+        } catch (e) {
+          // якщо модель не повернула чистий JSON
+          replyText = rawReply;
+        }
+      }
+    } catch (e) {
+      console.error("OpenAI error:", e);
+      replyText = "❌ Помилка при виклику OpenAI";
+    }
+
+    res.json({ kpi: kpiJson, reply: String(replyText) });
   } catch (error) {
-    console.error("Error calling OpenAI:", error);
-    res.status(500).json({ error: "Помилка при виклику моделі" });
+    console.error("DuckDB error:", error);
+    res.status(500).json({ reply: "❌ Помилка при аналізі: " + String(error) });
   }
 });
 
